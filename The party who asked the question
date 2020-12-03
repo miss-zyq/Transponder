@@ -1,0 +1,136 @@
+/*!
+ * MindPlus
+ * mpython
+ *
+ */
+#include <MPython.h>
+#include <DFRobot_Iot.h>
+#include <mPython_tinywebdb.h>
+
+// 动态变量
+String         mind_s_question, mind_s_time, mind_s_who;
+volatile float mind_n_start, mind_n_score, mind_n_score1, mind_n_score2, mind_n_control;
+// 函数声明
+void onButtonAPressed();
+void onButtonBPressed();
+void obloqMqttEventT1(String& message);
+void pin14TouchCallback();
+void pin4TouchCallback();
+void pin27TouchCallback();
+// 静态常量
+const String topics[5] = {"g80lYKcGg","Igi-Lh2MR","-9uhxxTGR","RKByDxAMR","HtIwNx0Mg"};
+const MsgHandleCb msgHandles[5] = {NULL,obloqMqttEventT1,NULL,NULL,NULL};
+// 创建对象
+DFRobot_Iot       myIot;
+mPython_TinyWebDB mydb;
+
+
+// 主程序开始
+void setup() {
+	mPython.begin();
+	dfrobotRandomSeed();
+	myIot.setMqttCallback(msgHandles);
+	buttonA.setPressedCallback(onButtonAPressed);
+	buttonB.setPressedCallback(onButtonBPressed);
+	touchPadY.setTouchedCallback(pin14TouchCallback);
+	touchPadN.setTouchedCallback(pin4TouchCallback);
+	touchPadP.setTouchedCallback(pin27TouchCallback);
+	myIot.wifiConnect("zyq", "12345678");
+	while (!myIot.wifiStatus()) {yield();}
+	display.setCursorLine(1);
+	display.printLine("WIFI连接成功");
+	myIot.init("iot.dfrobot.com.cn","jFSwAiFMg","","CFSQ0iFGRz",topics,1883);
+	myIot.connect();
+	while (!myIot.connected()) {yield();}
+	display.setCursorLine(2);
+	display.printLine("MQTT连接成功");
+	rgb.write(-1, 0x0000FF);
+	mydb.setServerParameter("http://tinywebdb.appinventor.space/api", "zyq226","a46a5f05");
+	display.setCursorLine(1);
+	display.printLine("欢迎使用出题器");
+	display.setCursorLine(2);
+	display.printLine("按A开启抢答器系统");
+	display.setCursorLine(3);
+	display.printLine("按B随机出题");
+	display.setCursorLine(4);
+	display.printLine("按触摸键P出选手成绩");
+	rgb.write(-1, 0x000000);
+}
+void loop() {
+
+}
+
+// 事件回调函数
+void onButtonAPressed() {
+	display.fillScreen(0);
+	myIot.publish(topic_0, "start");
+	display.setCursorLine(1);
+	display.printLine("开始答题");
+	mind_n_start = 0;
+	mind_n_score = 0;
+	mind_n_score1 = 0;
+	mind_n_score2 = 0;
+}
+void onButtonBPressed() {
+	myIot.publish(topic_0, "start");
+	display.fillScreen(0);
+	mind_n_start = millis();
+	mind_s_question = mydb.getTag((String((random(1, 5+1)))));
+	myIot.publish(topic_2, mind_s_question);
+	display.setCursorLine(1);
+	display.printLine(mind_s_question);
+	mind_n_control = 0;
+}
+void obloqMqttEventT1(String& message) {
+	mind_s_time = (String((String((String((((int)((millis() - mind_n_start) / 60000)) % ((int)60))) + String(":"))) + String((String((((int)((millis() - mind_n_start) / 1000)) % ((int)60))) + String(":"))))) + String((((int)(millis() - mind_n_start)) % ((int)1000))));
+	display.setCursorLine(3);
+	display.printLine((String((String("请 ") + String(message))) + String(" 回答该问题")));
+	mind_s_who = message;
+	display.setCursorLine(2);
+	display.printLine((String("抢答时间为") + String(mind_s_time)));
+}
+void pin14TouchCallback() {
+	if ((0==mind_n_control)) {
+		if ((String("1号")==mind_s_who)) {
+			mind_n_score += 1;
+		}
+		else if ((String("2号")==mind_s_who)) {
+			mind_n_score1 += 1;
+		}
+		else {
+			mind_n_score2 += 1;
+		}
+		myIot.publish(topic_4, "恭喜回答正确");
+		display.fillInLine(4, 0);
+		display.setCursorLine(4);
+		display.printLine("恭喜回答正确");
+		mind_n_control = 1;
+	}
+	myIot.publish(topic_3, (String((String((String((String("分值:1号:") + String((String(String(mind_n_score).charAt(1-1)))))) + String("  "))) + String("2号:"))) + String((String(String(mind_n_score1).charAt(1-1))))));
+}
+void pin4TouchCallback() {
+	if ((0==mind_n_control)) {
+		if ((String("1号")==mind_s_who)) {
+			mind_n_score -= 1;
+		}
+		else if ((String("2号")==mind_s_who)) {
+			mind_n_score1 -= 1;
+		}
+		else {
+			mind_n_score2 -= 1;
+		}
+		myIot.publish(topic_4, "抱歉回答错误");
+		display.fillInLine(4, 0);
+		display.setCursorLine(4);
+		display.printLine("抱歉回答错误");
+		mind_n_control = 1;
+	}
+	myIot.publish(topic_3, (String((String((String((String("分值:1号:") + String((String(String(mind_n_score).charAt(1-1)))))) + String("  "))) + String("2号:"))) + String((String(String(mind_n_score1).charAt(1-1))))));
+}
+void pin27TouchCallback() {
+	display.fillScreen(0);
+	display.setCursorLine(1);
+	display.printLine((String("1号成绩：") + String(mind_n_score)));
+	display.setCursorLine(2);
+	display.printLine((String("2号成绩：") + String(mind_n_score1)));
+}
